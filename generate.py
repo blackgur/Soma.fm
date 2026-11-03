@@ -19,6 +19,7 @@ import unicodedata
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 USER_AGENT = "soma-playlists/1.0 (+https://github.com/blackgur/Soma.fm)"
@@ -72,18 +73,25 @@ def load_config(path: Path | None) -> tuple[dict, Path]:
     return cfg, base
 
 
+def valid_bitrate(value: object) -> bool:
+    """A bitrate setting is a positive integer (kbps) or the word "max"."""
+    if value == "max":
+        return True
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
 def validate_config(cfg: dict) -> None:
     if cfg["scheme"] not in ("http", "https"):
         raise GenerationError("scheme must be 'http' or 'https'")
     if cfg["order"] not in ORDER_MODES:
         raise GenerationError(f"order must be one of: {', '.join(ORDER_MODES)}")
-    if not isinstance(cfg["default_bitrate"], int) or cfg["default_bitrate"] <= 0:
-        raise GenerationError("default_bitrate must be a positive integer")
+    if not valid_bitrate(cfg["default_bitrate"]):
+        raise GenerationError('default_bitrate must be a positive integer or "max"')
     overrides = cfg["bitrate_overrides"]
     if not isinstance(overrides, dict) or not all(
-        isinstance(k, str) and isinstance(v, int) and v > 0 for k, v in overrides.items()
+        isinstance(k, str) and valid_bitrate(v) for k, v in overrides.items()
     ):
-        raise GenerationError("bitrate_overrides must map channel ids to integers")
+        raise GenerationError('bitrate_overrides must map channel ids to positive integers or "max"')
     for key in ("exclude", "exclude_genres"):
         if not isinstance(cfg[key], list) or not all(isinstance(x, str) for x in cfg[key]):
             raise GenerationError(f"{key} must be a list of strings")
@@ -132,10 +140,13 @@ def mp3_bitrates(channel: dict) -> set[int]:
     return rates
 
 
-def pick_bitrate(rates: set[int], wanted: int) -> int | None:
-    """Exact match if offered, else the closest lower one, else the lowest."""
+def pick_bitrate(rates: set[int], wanted: int | str) -> int | None:
+    """"max": the highest offered bitrate. A number: exact match if offered,
+    else the closest lower one, else the lowest."""
     if not rates:
         return None
+    if wanted == "max":
+        return max(rates)
     if wanted in rates:
         return wanted
     lower = [r for r in rates if r <= wanted]
@@ -167,11 +178,23 @@ def ascii_title(title: str) -> str:
 
 
 @dataclass
+class Changes:
+    """Differences between the previous playlist and the new one."""
+    added: list = field(default_factory=list)    # new entries
+    removed: list = field(default_factory=list)  # previous entries
+    renamed: list = field(default_factory=list)  # (previous, new)
+    bitrate: list = field(default_factory=list)  # (previous, new)
+    address: list = field(default_factory=list)  # (previous, new): same bitrate, other URL
+
+    def __bool__(self) -> bool:
+        return any((self.added, self.removed, self.renamed, self.bitrate, self.address))
+
+
+@dataclass
 class Result:
     entries: list = field(default_factory=list)
     files: dict = field(default_factory=dict)
-    added: list = field(default_factory=list)
-    removed: list = field(default_factory=list)
+    changes: Changes = field(default_factory=Changes)
     skipped: list = field(default_factory=list)
 
 
@@ -224,22 +247,54 @@ def order_entries(entries: list, mode: str, existing_ids: list[str]) -> list:
     return kept + new
 
 
-STREAM_ID_RE = re.compile(r"/([A-Za-z0-9_]+)-\d+-mp3$")
+STREAM_RE = re.compile(r"/([A-Za-z0-9_]+)-(\d+)-mp3$")
 
 
-def read_existing_ids(path: Path) -> list[str]:
+def read_existing(path: Path) -> list[dict]:
+    """Entries of the previous playlist (id, title, bitrate, url), in file order."""
     try:
         text = path.read_text(encoding="utf-8-sig")
     except OSError:
         return []
-    ids: list[str] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            m = STREAM_ID_RE.search(line)
-            if m and m.group(1) not in ids:
-                ids.append(m.group(1))
-    return ids
+    entries: list[dict] = []
+    seen: set[str] = set()
+    title = ""
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("#EXTINF"):
+            title = line.split(",", 1)[1].strip() if "," in line else ""
+        elif line and not line.startswith("#"):
+            m = STREAM_RE.search(line)
+            if m and m.group(1) not in seen:
+                seen.add(m.group(1))
+                entries.append({"id": m.group(1), "title": title or m.group(1),
+                                "bitrate": int(m.group(2)), "url": line})
+            title = ""
+    return entries
+
+
+def read_existing_ids(path: Path) -> list[str]:
+    return [e["id"] for e in read_existing(path)]
+
+
+def diff_entries(old: list[dict], new: list[dict]) -> Changes:
+    old_by_id = {e["id"]: e for e in old}
+    new_ids = {e["id"] for e in new}
+    changes = Changes(
+        added=[e for e in new if e["id"] not in old_by_id],
+        removed=[e for e in old if e["id"] not in new_ids],
+    )
+    for e in new:
+        o = old_by_id.get(e["id"])
+        if o is None:
+            continue
+        if (ascii_title(e["title"]) or e["id"]) != o["title"]:  # the old file is ASCII
+            changes.renamed.append((o, e))
+        if o["bitrate"] != e["bitrate"]:
+            changes.bitrate.append((o, e))
+        elif o["url"] != e["url"]:
+            changes.address.append((o, e))
+    return changes
 
 
 # --------------------------------------------------------------------------
@@ -299,10 +354,11 @@ def render_all(entries: list, basename: str) -> dict:
 # generation
 # --------------------------------------------------------------------------
 
-def generate(data: object, cfg: dict, existing_ids: list[str]) -> Result:
+def generate(data: object, cfg: dict, existing: list[dict]) -> Result:
     if not isinstance(data, dict) or not isinstance(data.get("channels"), list):
         raise GenerationError("unexpected channel list format (no 'channels' array)")
     channels = data["channels"]
+    existing_ids = [e["id"] for e in existing]
     entries, skipped = build_entries(channels, cfg)
 
     if len(entries) < cfg["min_channels"]:
@@ -322,13 +378,10 @@ def generate(data: object, cfg: dict, existing_ids: list[str]) -> Result:
         )
 
     entries = order_entries(entries, cfg["order"], existing_ids)
-    new_ids = [e["id"] for e in entries]
-    titles = {e["id"]: e["title"] for e in entries}
     return Result(
         entries=entries,
         files=render_all(entries, cfg["basename"]),
-        added=[f"{titles[i]} ({i})" for i in new_ids if i not in existing_ids],
-        removed=[i for i in existing_ids if i not in titles],
+        changes=diff_entries(existing, entries),
         skipped=skipped,
     )
 
@@ -380,6 +433,35 @@ def check_streams(entries: list, workers: int = 8) -> list[tuple[dict, str]]:
 # command line
 # --------------------------------------------------------------------------
 
+def _name(entry: dict) -> str:
+    return f"{entry['title']} (`{entry['id']}`)"
+
+
+def render_release_notes(res: Result, changed_files: list[str], date: str) -> str:
+    ch = res.changes
+    lines = [
+        f"## SomaFM playlists, {date}",
+        "",
+        f"{len(res.entries)} channels in each playlist. Changes since the previous version:",
+    ]
+
+    def section(title: str, items: list) -> None:
+        if items:
+            lines.extend(["", f"**{title}**"] + items)
+
+    section("Added", [f"- {_name(e)}, {e['bitrate']} kbps" for e in res.changes.added])
+    section("Removed", [f"- {_name(e)}" for e in ch.removed])
+    section("Renamed", [f"- {o['title']} \u2192 {n['title']} (`{n['id']}`)" for o, n in ch.renamed])
+    section("Bitrate changed",
+            [f"- {_name(n)}: {o['bitrate']} \u2192 {n['bitrate']} kbps" for o, n in ch.bitrate])
+    section("Stream address changed", [f"- {_name(n)}" for _, n in ch.address])
+    if not ch:
+        lines += ["", "No channels were added, removed or renamed; the files were regenerated "
+                      "(formatting or settings changed)."]
+    lines += ["", f"Updated files: {', '.join(changed_files)}.", ""]
+    return "\n".join(lines)
+
+
 def write_step_summary(res: Result, changed: list[str]) -> None:
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
@@ -389,10 +471,13 @@ def write_step_summary(res: Result, changed: list[str]) -> None:
         "",
         f"{len(res.entries)} channels. Changed files: {', '.join(changed) if changed else 'none'}.",
     ]
-    if res.added:
-        lines.append(f"- Added: {', '.join(res.added)}")
-    if res.removed:
-        lines.append(f"- Removed: {', '.join(res.removed)}")
+    if res.changes.added:
+        lines.append(f"- Added: {', '.join(_name(e) for e in res.changes.added)}")
+    if res.changes.removed:
+        lines.append(f"- Removed: {', '.join(_name(e) for e in res.changes.removed)}")
+    if res.changes.renamed or res.changes.bitrate or res.changes.address:
+        lines.append(f"- Renamed: {len(res.changes.renamed)}, bitrate changed: {len(res.changes.bitrate)}, "
+                     f"address changed: {len(res.changes.address)}")
     with open(path, "a", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
 
@@ -406,6 +491,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--output-dir", type=Path, default=None,
                    help="where to write the playlists (overrides output_dir from the config)")
     p.add_argument("--dry-run", action="store_true", help="show what would change, write nothing")
+    p.add_argument("--notes-file", type=Path, default=None,
+                   help="when playlist files changed, write release notes (Markdown) to this file")
     p.add_argument("--check", action="store_true",
                    help="also test every stream URL (advisory: failures are reported, exit code stays 0)")
     return p.parse_args(argv)
@@ -431,19 +518,26 @@ def main(argv: list[str] | None = None) -> int:
             data = fetch_json(cfg["api_url"])
             source = cfg["api_url"]
 
-        existing = read_existing_ids(out_dir / f"{cfg['basename']}.m3u")
+        existing = read_existing(out_dir / f"{cfg['basename']}.m3u")
         res = generate(data, cfg, existing)
     except GenerationError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
     print(f"Source: {source}")
+    ch = res.changes
     print(f"Playlist: {len(res.entries)} channels"
-          f" (+{len(res.added)} added, -{len(res.removed)} removed)")
-    for item in res.added:
-        print(f"  added:   {item}")
-    for item in res.removed:
-        print(f"  removed: {item}")
+          f" (+{len(ch.added)} added, -{len(ch.removed)} removed)")
+    for e in ch.added:
+        print(f"  added:   {e['title']} ({e['id']}), {e['bitrate']} kbps")
+    for e in ch.removed:
+        print(f"  removed: {e['title']} ({e['id']})")
+    for o, n in ch.renamed:
+        print(f"  renamed: {o['title']} -> {n['title']} ({n['id']})")
+    for o, n in ch.bitrate:
+        print(f"  bitrate: {n['title']} ({n['id']}): {o['bitrate']} -> {n['bitrate']} kbps")
+    for _, n in ch.address:
+        print(f"  address: {n['title']} ({n['id']})")
     for cid in res.skipped:
         print(f"  skipped (no MP3 stream listed): {cid}")
 
@@ -460,6 +554,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {path}: {'updated' if changed_now else 'unchanged'}"
               f"{' (dry run)' if args.dry_run and changed_now else ''}")
     write_step_summary(res, changed)
+
+    if args.notes_file is not None and changed:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        args.notes_file.parent.mkdir(parents=True, exist_ok=True)
+        args.notes_file.write_text(render_release_notes(res, changed, date), encoding="utf-8")
+        print(f"Release notes written to {args.notes_file}")
 
     if args.check:
         failed = check_streams(res.entries)

@@ -4,10 +4,10 @@
   "basename": "SomaFM",
   "scheme": "https",
   "host": "ice1.somafm.com",
-  "default_bitrate": 1000,
+  "default_bitrate": "max",
   "bitrate_overrides": {},
   "exclude": [],
   "exclude_genres": [],
-  "order": "alpha",
+  "order": "keep",
   "min_channels": 20
 }

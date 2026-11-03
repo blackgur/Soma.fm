@@ -2,11 +2,11 @@ name: Update playlists
 
 on:
   schedule:
-    - cron: "23 4 * * 1" # every Monday, 04:23 UTC
+    - cron: "0 18 * * 1" # every Monday at 21:00 (UTC+3) = 18:00 UTC
   workflow_dispatch: # manual run: Actions tab -> Update playlists -> Run workflow
 
 permissions:
-  contents: write # needed to push the regenerated playlists
+  contents: write # push the playlists and create releases
 
 concurrency:
   group: update-playlists
@@ -23,16 +23,37 @@ jobs:
         run: python3 -m unittest discover -s tests -v
 
       - name: Generate playlists (and check streams)
-        run: python3 generate.py --check
+        run: python3 generate.py --check --notes-file "$RUNNER_TEMP/release-notes.md"
 
       - name: Commit changes
+        id: commit
         run: |
           git add Playlists
           if git diff --cached --quiet; then
             echo "Playlists are up to date."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "Update playlists from somafm.com"
             git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # Runs only if every step above succeeded and the playlists changed.
+      - name: Publish release
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$(date -u +%Y.%m.%d).${GITHUB_RUN_NUMBER}"
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          if [ -s "$NOTES" ]; then
+            NOTES_ARGS=(--notes-file "$NOTES")
+          else
+            NOTES_ARGS=(--generate-notes)
+          fi
+          gh release create "$TAG" Playlists/* \
+            --title "Playlists $(date -u +%Y-%m-%d)" \
+            --target "$(git rev-parse HEAD)" \
+            "${NOTES_ARGS[@]}"

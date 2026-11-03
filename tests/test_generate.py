@@ -59,6 +59,11 @@ class BitrateTests(unittest.TestCase):
         self.assertEqual(g.pick_bitrate({256}, 128), 256)       # nothing lower: lowest offered
         self.assertIsNone(g.pick_bitrate(set(), 128))
 
+    def test_pick_bitrate_max(self):
+        self.assertEqual(g.pick_bitrate({128, 256, 320}, "max"), 320)
+        self.assertEqual(g.pick_bitrate({128}, "max"), 128)
+        self.assertIsNone(g.pick_bitrate(set(), "max"))
+
 
 class EntryTests(unittest.TestCase):
     def test_stream_url_and_overrides(self):
@@ -68,6 +73,14 @@ class EntryTests(unittest.TestCase):
         self.assertEqual(skipped, [])
         self.assertEqual(entries[0]["url"], "https://ice1.somafm.com/a-256-mp3")
         self.assertEqual(entries[1]["url"], "https://ice1.somafm.com/b-128-mp3")
+
+    def test_max_as_default_and_as_override(self):
+        chans = [channel("a", "A", mp3=(320, 128)), channel("b", "B", mp3=(256, 128)),
+                 channel("c", "C", mp3=(128,)), channel("d", "D", mp3=(256, 128))]
+        entries, _ = g.build_entries(chans, cfg(default_bitrate="max", bitrate_overrides={"d": 128}))
+        self.assertEqual([e["bitrate"] for e in entries], [320, 256, 128, 128])
+        entries, _ = g.build_entries(chans, cfg(default_bitrate=128, bitrate_overrides={"b": "max"}))
+        self.assertEqual([e["bitrate"] for e in entries], [128, 256, 128, 128])
 
     def test_exclude_by_id_and_genre(self):
         chans = [channel("a", "A"), channel("b", "B", genre="holiday"),
@@ -106,6 +119,44 @@ class OrderTests(unittest.TestCase):
 
     def test_keep_without_existing_falls_back_to_listeners(self):
         self.assertEqual(self.ids("keep"), self.ids("listeners"))
+
+
+class DiffTests(unittest.TestCase):
+    def old(self, cid, title, rate=128, host="https://ice1.somafm.com"):
+        return {"id": cid, "title": title, "bitrate": rate, "url": f"{host}/{cid}-{rate}-mp3"}
+
+    def new(self, cid, title, rate=128, host="https://ice1.somafm.com"):
+        return {"id": cid, "title": title, "bitrate": rate, "url": f"{host}/{cid}-{rate}-mp3",
+                "listeners": 0}
+
+    def test_all_categories(self):
+        old = [self.old("a", "Alpha"), self.old("b", "Beta"), self.old("c", "Gamma"),
+               self.old("d", "Delta"), self.old("e", "Cafe")]
+        new = [self.new("a", "Alpha"), self.new("c", "Gamma 2"), self.new("d", "Delta", 256),
+               self.new("e", "Caf\u00e9", host="http://ice2.somafm.com"), self.new("f", "Fresh")]
+        ch = g.diff_entries(old, new)
+        self.assertEqual([e["id"] for e in ch.added], ["f"])
+        self.assertEqual([e["id"] for e in ch.removed], ["b"])
+        self.assertEqual([n["id"] for _, n in ch.renamed], ["c"])   # "Cafe" vs "Caf\u00e9": not a rename
+        self.assertEqual([n["id"] for _, n in ch.bitrate], ["d"])
+        self.assertEqual([n["id"] for _, n in ch.address], ["e"])
+        self.assertTrue(ch)
+
+    def test_no_changes(self):
+        self.assertFalse(g.diff_entries([self.old("a", "Alpha")], [self.new("a", "Alpha")]))
+
+    def test_read_existing_roundtrip(self):
+        entries, _ = g.build_entries([channel("a", "A", mp3=(256, 128))], cfg(default_bitrate="max"))
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "x.m3u"
+            path.write_bytes(g.render_all(entries, "x")["x.m3u"])
+            back = g.read_existing(path)
+        self.assertEqual(back, [{"id": "a", "title": "A", "bitrate": 256,
+                                 "url": "https://ice1.somafm.com/a-256-mp3"}])
+        self.assertFalse(g.diff_entries(back, entries))
+
+    def test_read_existing_missing_file(self):
+        self.assertEqual(g.read_existing(Path("/nonexistent/none.m3u")), [])
 
 
 class RenderTests(unittest.TestCase):
@@ -162,7 +213,8 @@ class SanityTests(unittest.TestCase):
 
     def test_big_drop_against_existing_list(self):
         with self.assertRaises(g.GenerationError):
-            g.generate(sample(5), cfg(), [f"old{i}" for i in range(20)])
+            g.generate(sample(5), cfg(), [{"id": f"old{i}", "title": "Old", "bitrate": 128, "url": ""}
+                                          for i in range(20)])
 
     def test_bad_config_is_rejected(self):
         with tempfile.TemporaryDirectory() as d:
@@ -173,6 +225,15 @@ class SanityTests(unittest.TestCase):
             p.write_text('{"typo_option": 1}')
             with self.assertRaises(g.GenerationError):
                 g.load_config(p)
+            for bad in ('"best"', "0", "true", "[128]"):
+                p.write_text('{"default_bitrate": %s}' % bad)
+                with self.assertRaises(g.GenerationError, msg=bad):
+                    g.load_config(p)
+            p.write_text('{"bitrate_overrides": {"a": "fast"}}')
+            with self.assertRaises(g.GenerationError):
+                g.load_config(p)
+            p.write_text('{"default_bitrate": "max", "bitrate_overrides": {"a": "max", "b": 192}}')
+            self.assertEqual(g.load_config(p)[0]["default_bitrate"], "max")
 
 
 class MainTests(unittest.TestCase):
@@ -241,6 +302,47 @@ class MainTests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("error:", err)
             self.assertEqual(before, {p.name: p.read_bytes() for p in out.iterdir()})
+
+    def test_release_notes(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src, conf, out, notes = d / "c.json", d / "config.json", d / "out", d / "notes.md"
+            conf.write_text("{}")
+            args = ["--config", str(conf), "--input", str(src), "--output-dir", str(out),
+                    "--notes-file", str(notes)]
+
+            def data(*chans):
+                src.write_text(json.dumps({"channels": list(chans)}))
+
+            fixed = [channel(f"k{i}", f"Keep {i}", listeners=i) for i in range(24)]
+            data(*fixed, channel("a", "Alpha", mp3=(256, 128)), channel("b", "Beta"))
+            self.run_main(*args)
+            first = notes.read_text()
+            self.assertIn("26 channels", first)
+            self.assertIn("**Added**", first)
+            self.assertIn("- Alpha (`a`), 128 kbps", first)
+            self.assertIn("Updated files: SomaFM.m3u", first)
+
+            notes.unlink()
+            self.run_main(*args)                       # nothing changed
+            self.assertFalse(notes.exists())
+
+            conf.write_text('{"default_bitrate": "max"}')
+            data(*fixed, channel("a", "Alpha Prime", mp3=(256, 128)), channel("c", "Gamma"))
+            self.run_main(*args)
+            text = notes.read_text()
+            self.assertIn("**Added**\n- Gamma (`c`), 128 kbps", text)
+            self.assertIn("**Removed**\n- Beta (`b`)", text)
+            self.assertIn("**Renamed**\n- Alpha \u2192 Alpha Prime (`a`)", text)
+            self.assertIn("**Bitrate changed**\n- Alpha Prime (`a`): 128 \u2192 256 kbps", text)
+
+    def test_notes_when_only_formatting_changed(self):
+        entries, _ = g.build_entries([channel("a", "A")], cfg())
+        res = g.Result(entries=entries, changes=g.diff_entries([{"id": "a", "title": "A", "bitrate": 128,
+                       "url": entries[0]["url"]}], entries))
+        text = g.render_release_notes(res, ["SomaFM.pls"], "2026-11-09")
+        self.assertIn("No channels were added, removed or renamed", text)
+        self.assertIn("2026-11-09", text)
 
     def test_github_step_summary(self):
         with tempfile.TemporaryDirectory() as d:
