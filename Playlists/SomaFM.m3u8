@@ -1,67 +1,103 @@
-﻿#EXTM3U
+#EXTM3U
 #EXTINF:-1,Groove Salad
-http://ice1.somafm.com/groovesalad-128-mp3
-#EXTINF:-1,DropZone
-http://ice1.somafm.com/dronezone-128-mp3
-#EXTINF:-1,Indie Pop Rocks!
-http://ice1.somafm.com/indiepop-128-mp3
-#EXTINF:-1,Space Station Soma
-http://ice1.somafm.com/spacestation-128-mp3
-#EXTINF:-1,Secret Agent
-http://ice1.somafm.com/secretagent-128-mp3
-#EXTINF:-1,Lush
-http://ice1.somafm.com/lush-128-mp3
-#EXTINF:-1,Underground 80s
-http://ice1.somafm.com/u80s-256-mp3
-#EXTINF:-1,DEF CON Radio
-http://ice1.somafm.com/defcon-128-mp3
+https://ice1.somafm.com/groovesalad-256-mp3
+#EXTINF:-1,Drone Zone
+https://ice1.somafm.com/dronezone-256-mp3
 #EXTINF:-1,Deep Space One
-http://ice1.somafm.com/deepspaceone-128-mp3
-#EXTINF:-1,Beat Blender
-http://ice1.somafm.com/beatblender-128-mp3
-#EXTINF:-1,BAGeL Radio
-http://ice1.somafm.com/bagel-128-mp3
-#EXTINF:-1,PopTron
-http://ice1.somafm.com/poptron-128-mp3
+https://ice1.somafm.com/deepspaceone-128-mp3
+#EXTINF:-1,Indie Pop Rocks!
+https://ice1.somafm.com/indiepop-128-mp3
+#EXTINF:-1,Space Station Soma
+https://ice1.somafm.com/spacestation-320-mp3
+#EXTINF:-1,Lush
+https://ice1.somafm.com/lush-128-mp3
+#EXTINF:-1,Groove Salad Classic
+https://ice1.somafm.com/gsclassic-128-mp3
+#EXTINF:-1,Underground 80s
+https://ice1.somafm.com/u80s-256-mp3
+#EXTINF:-1,Synphaera Radio
+https://ice1.somafm.com/synphaera-256-mp3
+#EXTINF:-1,Secret Agent
+https://ice1.somafm.com/secretagent-128-mp3
 #EXTINF:-1,Left Coast 70s
-http://ice1.somafm.com/seventies-320-mp3
-#EXTINF:-1,Suburbs of Goa
-http://ice1.somafm.com/suburbsofgoa-128-mp3
-#EXTINF:-1,Boot Liquor
-http://ice1.somafm.com/bootliquor-128-mp3
-#EXTINF:-1,The Trip
-http://ice1.somafm.com/thetrip-128-mp3
+https://ice1.somafm.com/seventies-320-mp3
+#EXTINF:-1,Groove Salad 2
+https://ice1.somafm.com/groovesalad2-256-mp3
+#EXTINF:-1,DEF CON Radio
+https://ice1.somafm.com/defcon-256-mp3
 #EXTINF:-1,Folk Forward
-http://ice1.somafm.com/folkfwd-128-mp3
+https://ice1.somafm.com/folkfwd-128-mp3
+#EXTINF:-1,Beat Blender
+https://ice1.somafm.com/beatblender-128-mp3
+#EXTINF:-1,The Dark Zone
+https://ice1.somafm.com/darkzone-256-mp3
+#EXTINF:-1,Bossa Beyond
+https://ice1.somafm.com/bossa-256-mp3
 #EXTINF:-1,Sonic Universe
-http://ice1.somafm.com/sonicuniverse-192-mp3
-#EXTINF:-1,ThistleRadio
-http://ice1.somafm.com/thistle-128-mp3
-#EXTINF:-1,Illinois Street Lounge
-http://ice1.somafm.com/illstreet-128-mp3
-#EXTINF:-1,Seven Inch Soul
-http://ice1.somafm.com/7soul-128-mp3
+https://ice1.somafm.com/sonicuniverse-256-mp3
+#EXTINF:-1,Boot Liquor
+https://ice1.somafm.com/bootliquor-320-mp3
 #EXTINF:-1,Fluid
-http://ice1.somafm.com/fluid-128-mp3
+https://ice1.somafm.com/fluid-128-mp3
+#EXTINF:-1,PopTron
+https://ice1.somafm.com/poptron-128-mp3
+#EXTINF:-1,The Trip
+https://ice1.somafm.com/thetrip-128-mp3
+#EXTINF:-1,Seven Inch Soul
+https://ice1.somafm.com/7soul-128-mp3
+#EXTINF:-1,Drone Zone 2
+https://ice1.somafm.com/dz2-128-mp3
+#EXTINF:-1,Suburbs of Goa
+https://ice1.somafm.com/suburbsofgoa-128-mp3
+#EXTINF:-1,Heavyweight Reggae
+https://ice1.somafm.com/reggae-256-mp3
+#EXTINF:-1,ThistleRadio
+https://ice1.somafm.com/thistle-128-mp3
+#EXTINF:-1,Illinois Street Lounge
+https://ice1.somafm.com/illstreet-128-mp3
+#EXTINF:-1,Vaporwaves
+https://ice1.somafm.com/vaporwaves-128-mp3
 #EXTINF:-1,Digitalis
-http://ice1.somafm.com/digitalis-128-mp3
-#EXTINF:-1,Cliqhop idm
-http://ice1.somafm.com/cliqhop-128-mp3
-#EXTINF:-1,Dub Step Beyond
-http://ice1.somafm.com/dubstep-256-mp3
-#EXTINF:-1,Black Rock FM
-http://ice1.somafm.com/brfm-128-mp3
+https://ice1.somafm.com/digitalis-256-mp3
+#EXTINF:-1,cliqhop idm
+https://ice1.somafm.com/cliqhop-256-mp3
 #EXTINF:-1,Mission Control
-http://ice1.somafm.com/missioncontrol-128-mp3
-#EXTINF:-1,SF 10-33
-http://ice1.somafm.com/sf1033-128-mp3
-#EXTINF:-1,Halifax - Straight Up
-http://ice1.somafm.com/covers-128-mp3
-#EXTINF:-1,Doomed
-http://ice1.somafm.com/doomed-128-mp3
-#EXTINF:-1,The Silent Channel
-http://ice1.somafm.com/silent-128-mp3
+https://ice1.somafm.com/missioncontrol-128-mp3
+#EXTINF:-1,Dub Step Beyond
+https://ice1.somafm.com/dubstep-256-mp3
+#EXTINF:-1,Covers
+https://ice1.somafm.com/covers-128-mp3
 #EXTINF:-1,Metal Detector
-http://ice1.somafm.com/metal-128-mp3
-#EXTINF:-1,Earwaves
-http://ice1.somafm.com/earwaves-128-mp3
+https://ice1.somafm.com/metal-128-mp3
+#EXTINF:-1,Black Rock FM
+https://ice1.somafm.com/brfm-128-mp3
+#EXTINF:-1,Christmas Lounge
+https://ice1.somafm.com/christmas-256-mp3
+#EXTINF:-1,SF 10-33
+https://ice1.somafm.com/sf1033-128-mp3
+#EXTINF:-1,Doomed
+https://ice1.somafm.com/doomed-256-mp3
+#EXTINF:-1,Tiki Time
+https://ice1.somafm.com/tikitime-256-mp3
+#EXTINF:-1,n5MD Radio
+https://ice1.somafm.com/n5md-128-mp3
+#EXTINF:-1,The In-Sound
+https://ice1.somafm.com/insound-256-mp3
+#EXTINF:-1,Department Store Christmas
+https://ice1.somafm.com/deptstore-256-mp3
+#EXTINF:-1,SF Police Scanner
+https://ice1.somafm.com/scanner-128-mp3
+#EXTINF:-1,SomaFM Live
+https://ice1.somafm.com/live-128-mp3
+#EXTINF:-1,SomaFM Specials
+https://ice1.somafm.com/specials-128-mp3
+#EXTINF:-1,Chillits Radio
+https://ice1.somafm.com/chillits-256-mp3
+#EXTINF:-1,Xmas in Frisko
+https://ice1.somafm.com/xmasinfrisko-128-mp3
+#EXTINF:-1,Christmas Rocks!
+https://ice1.somafm.com/xmasrocks-128-mp3
+#EXTINF:-1,Jolly Ol' Soul
+https://ice1.somafm.com/jollysoul-128-mp3
+#EXTINF:-1,SF in SF
+https://ice1.somafm.com/sfinsf-128-mp3

@@ -1,0 +1,38 @@
+name: Update playlists
+
+on:
+  schedule:
+    - cron: "23 4 * * 1" # every Monday, 04:23 UTC
+  workflow_dispatch: # manual run: Actions tab -> Update playlists -> Run workflow
+
+permissions:
+  contents: write # needed to push the regenerated playlists
+
+concurrency:
+  group: update-playlists
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Generate playlists (and check streams)
+        run: python3 generate.py --check
+
+      - name: Commit changes
+        run: |
+          git add Playlists
+          if git diff --cached --quiet; then
+            echo "Playlists are up to date."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Update playlists from somafm.com"
+            git push
+          fi

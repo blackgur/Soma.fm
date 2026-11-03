@@ -1,0 +1,13 @@
+{
+  "api_url": "https://api.somafm.com/channels.json",
+  "output_dir": "Playlists",
+  "basename": "SomaFM",
+  "scheme": "https",
+  "host": "ice1.somafm.com",
+  "default_bitrate": 1000,
+  "bitrate_overrides": {},
+  "exclude": [],
+  "exclude_genres": [],
+  "order": "alpha",
+  "min_channels": 20
+}
